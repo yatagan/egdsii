@@ -5,6 +5,7 @@
     {modules, [ 
       gds2txt,
       gdsii,
+      gdsdump_lex,
       txt2gds
     ]},
     {registered, []},
