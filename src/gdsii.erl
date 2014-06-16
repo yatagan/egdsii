@@ -16,16 +16,27 @@
 
 -export_type([data_type/0, record_data/0]).
 
--spec read_record(file:io_device()) -> {non_neg_integer(), record_data()}.
+%% -spec read_record(file:io_device()) -> {non_neg_integer(), record_data()}.
 
-read_record(Dev) ->
-  case file:read(Dev, 4) of
-    {ok, Data} when byte_size(Data) == 4 ->
+%% read_record(Dev) ->
+%%   case file:read(Dev, 4) of
+%%     {ok, Data} when byte_size(Data) == 4 ->
+%%       case Data of
+%%         <<DataSize:16, Tag:16>> when DataSize >= 4 ->
+%%           {Tag, read_data(Dev, DataSize - 4, Tag)}
+%%       end
+%%     % maybe handle errors
+%%   end.
+
+read_record(MetaDev) ->
+  case read:read_buff(MetaDev, 4) of
+    {ok, Data, MetaDev1} when byte_size(Data) == 4 ->
       case Data of
         <<DataSize:16, Tag:16>> when DataSize >= 4 ->
-          {Tag, read_data(Dev, DataSize - 4, Tag)}
+          {TagData, MetaDev2} = read_data(MetaDev1, DataSize - 4, Tag),
+          {Tag, TagData, MetaDev2}
       end
-    % maybe handle errors
+  % maybe handle errors
   end.
 
 -spec type_of_tag(non_neg_integer()) -> data_type().
@@ -62,22 +73,22 @@ real8_from_binary(<<Sgn:1, Exp:7, Mant:56, Rest/binary>>) ->
   Float = FSign * Mant * math:pow(2, (4 * (Exp - 64) - 56)),
   [Float | real8_from_binary(Rest)].
 
--spec read_data(file:io_device(), non_neg_integer(), non_neg_integer()) -> record_data().
+%% -spec read_data(file:io_device(), non_neg_integer(), non_neg_integer()) -> record_data().
 
 read_data(Dev, Size, Tag) ->
   read_data_type(Dev, Size, type_of_tag(Tag)).
 
 -spec read_data_type(file:io_device(), non_neg_integer(), data_type()) -> record_data().
 
-read_data_type(_Dev, Size, nodata) ->
+read_data_type(MetaDev, Size, nodata) ->
   case Size of
-    0 -> nodata
+    0 -> {nodata, MetaDev}
   end;
 
-read_data_type(Dev, Size, Type) ->
-  case file:read(Dev, Size) of
-    {ok, Data} when byte_size(Data) == Size ->
-      parse_data(Size, Data, Type)
+read_data_type(MetaDev, Size, Type) ->
+  case read:read_buff(MetaDev, Size) of
+    {ok, Data, MetaDev1} when byte_size(Data) == Size ->
+      {parse_data(Size, Data, Type), MetaDev1}
   end.
 
 parse_data(2, Data, bitarray) ->
